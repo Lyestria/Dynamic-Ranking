@@ -3,6 +3,9 @@ import numpy as np
 from datetime import date, timedelta
 import os
 import json
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 def daterange(start_date, end_date):
     for n in range(int((end_date - start_date).days)):
@@ -14,6 +17,7 @@ df = pd.read_csv('https://covid.ourworldindata.org/data/owid-covid-data.csv', pa
 categories = df.columns[4:]
 
 # Get the list of locations
+logging.info('Extracting location data')
 locations = set()
 for loc, cont, iso in zip(df['location'], df['continent'], df['iso_code']):
     if not loc in locations:
@@ -22,26 +26,12 @@ for loc, cont, iso in zip(df['location'], df['continent'], df['iso_code']):
         continent[loc] = cont
 
 # Write iso and continent data
-with open(os.path.join('data', 'metadata.json'), 'w') as outfile:
+with open(os.path.join('data', 'location_data.json'), 'w') as outfile:
     json.dump({'continent':continent, 'iso_code':iso_code}, outfile)
 
-# Get the date range
-min_date = df['date'].min()
-max_date = df['date'].max()
-
-# Create data frames for the categoriess
-data = [[date] + [np.nan for loc in locations] for date in daterange(min_date, max_date + timedelta(1))]
-default_frame = pd.DataFrame(data, columns=['date'] + list(locations))
-frames = {category:default_frame.copy() for category in categories}
-
-# Fill in the data according to the tables
-for ind, row in df.iterrows():
-    for category in categories:
-        loc = row['location']
-        date = row['date']
-        frames[category][loc, date] = row[category]
-        
-# Output rows to tables
-for category, frame in frames.items():
+# Pivot to table with data type
+for category in categories:
+    logging.info(f'Extracting data for {category}')
+    frame = df.pivot(index='date', columns='location', values=category)
     path = os.path.join('data', f'{category}.csv')
-    frame.to_csv(path, index=False)
+    frame.to_csv(path)
